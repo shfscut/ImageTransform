@@ -22,6 +22,12 @@ class MyImage(object):
         return self.im.size
 
     def get_compress_image(self, dst_w=0, dst_h=0):
+        """
+        Compress pictures according to width and height
+        :param dst_w: pixel of target width
+        :param dst_h: pixel of target height
+        :return:
+        """
         ori_w, ori_h = self.get_size()
         w_ratio, h_ratio = None, None
         if 0 < dst_w < ori_w or 0 < dst_h < ori_h:
@@ -38,6 +44,10 @@ class MyImage(object):
         self.im.resize((re_width, re_height), Image.ANTIALIAS).save(self.filepath)
 
     def get_image_filename(self):
+        """
+        get the image filename according to self.url
+        :return: image filename
+        """
         re_result = re.search('.*/(.+)', self.url)
         if re_result:
             return re_result.group(1)
@@ -51,6 +61,11 @@ class MyImage(object):
         return 'temp.jpg'
 
     def get_image_file(self):
+        """
+        Get third-party images through requests.get, write them to the file,
+        and finally return the file handle
+        :return: the Image object
+        """
         r = requests.get(self.url, stream=True)
         with open(self.filepath, 'wb') as fd:
             for chunk in r.iter_content(chunk_size=128):
@@ -62,9 +77,14 @@ class MyImage(object):
 
 class ResizeImage(View):
     def get(self, request, transform_params, image_url):
-        # 正则表达式分析transform_params
+        """
+        :param request:
+        :param transform_params: 类似w_{width_in_pixel}, h_{height_in_pixel}
+        :param image_url:类似 https://imgsa.baidu.com/forum/pic/item/462309f790529822a8f35517dbca7bcb0b46d426.jpg
+        :return:
+        """
+        # 第一步：正则表达式分析transform_params
         params_split = transform_params.split(',')
-
         width_in_pixel, height_in_pixel=0,0
         for item in params_split:
             item_strip = item.strip()
