@@ -102,3 +102,15 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+
+
+# other files
+1.jpg
+django-nginx.conf
+excise.py
+nginx.conf
+re_test.py
+test-uwsgi.ini
+uwsgi_params
+
