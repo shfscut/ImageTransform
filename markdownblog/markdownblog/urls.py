@@ -1,4 +1,4 @@
-"""myImageTransform URL Configuration
+"""markdownblog URL Configuration
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/1.11/topics/http/urls/
@@ -18,8 +18,8 @@ from django.contrib import admin
 from django.conf.urls.static import static
 from django.views.static import serve
 
-from myImageTransform import settings
-from myImageResize.views import ResizeImage
+from markdownblog import settings
+from apps.imageproxy.views import ImageProxy
 
 urlpatterns = [
     url(r'^admin/', admin.site.urls),
@@ -28,6 +28,6 @@ urlpatterns = [
     url(r'^media/(?P<path>.*)$', serve,{'document_root':settings.MEDIA_ROOT}),
 
     # image resize
-    url(r'^(?P<transform_params>.*?)/(?P<image_url>.+)', ResizeImage.as_view(), name='resize-image')
+    url(r'^(?P<transform_params>.*?)/(?P<image_url>.+)', ImageProxy.as_view(), name='resize-image')
 ]
 # + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
