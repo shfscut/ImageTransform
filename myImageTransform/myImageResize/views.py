@@ -101,3 +101,4 @@ class ResizeImage(View):
         my_img.get_compress_image(width_in_pixel, height_in_pixel)
         # image_data=open(my_img.filepath, 'rb').read()
         return FileResponse(open(my_img.filepath, 'rb'), content_type='image/jpeg')
+import heapq
