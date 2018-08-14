@@ -6,23 +6,30 @@ from django.shortcuts import render
 from django.http import HttpResponseRedirect, HttpResponse, FileResponse
 from django.views import View
 import requests
+from requests.exceptions import HTTPError
 from PIL import Image
 
-from myImageTransform import settings
+from markdownblog import settings
 # Create your views here.
 
-class MyImage(object):
+class CompressImage(object):
+    """
+    1. create_image_from_url:根据url链接，创建图片
+    2. get_image_name：根据url链接，获取图片名称
+    3. get_image_size：获取原始图片尺寸
+    4. compress_image：压缩原始图片
+    """
     def __init__(self, url):
         self.url = url
-        self.filename = self.get_image_filename()
-        self.filepath = os.path.join(settings.MEDIA_ROOT,self.filename)
-        self.im = self.get_image_file()
+        self.imagename = self.get_image_name()
+        self.filepath = os.path.join(settings.MEDIA_ROOT,self.imagename)
+        self.im = self.create_image_from_url()
 
-    def get_size(self):
+    def get_image_size(self):
         return self.im.size
 
-    def get_compress_image(self, dst_w=0, dst_h=0):
-        ori_w, ori_h = self.get_size()
+    def compress_image(self, dst_w=0, dst_h=0):
+        ori_w, ori_h = self.get_image_size()
         w_ratio, h_ratio = None, None
         if 0 < dst_w < ori_w or 0 < dst_h < ori_h:
             if 0 < dst_w < ori_w:
@@ -37,7 +44,7 @@ class MyImage(object):
         # 根据压缩后的像素尺寸进行resize,并保存为filename
         self.im.resize((re_width, re_height), Image.ANTIALIAS).save(self.filepath)
 
-    def get_image_filename(self):
+    def get_image_name(self):
         re_result = re.search('.*/(.+)', self.url)
         if re_result:
             return re_result.group(1)
@@ -50,17 +57,25 @@ class MyImage(object):
             return 'temp.' + file_type
         return 'temp.jpg'
 
-    def get_image_file(self):
+    def create_image_from_url(self):
         r = requests.get(self.url, stream=True)
-        with open(self.filepath, 'wb') as fd:
-            for chunk in r.iter_content(chunk_size=128):
-                fd.write(chunk)
+        try:
+            r.raise_for_status() # Raises stored HTTPError, if one occurred
+        except HTTPError:
+            raise
 
+        try:
+            with open(self.filepath, 'wb') as fd:
+                for chunk in r.iter_content(chunk_size=128):
+                    fd.write(chunk)
+            im = Image.open(self.filepath)
+        except OSError:
+            raise
         # 获取filename文件句柄
-        return Image.open(self.filepath)
+        return im
 
 
-class ResizeImage(View):
+class ImageProxy(View):
     def get(self, request, transform_params, image_url):
         # 正则表达式分析transform_params
         params_split = transform_params.split(',')
@@ -76,8 +91,33 @@ class ResizeImage(View):
                 height_in_pixel = int(result.group('h'))
 
         # 第二步 获取image_url
-        my_img = MyImage(image_url)
-        my_img.get_image_file()
-        my_img.get_compress_image(width_in_pixel, height_in_pixel)
+        try:
+            comp_img = CompressImage(image_url)
+            comp_img.create_image_from_url()
+            comp_img.compress_image(width_in_pixel, height_in_pixel)
+        except HTTPError as e:
+            print(str(e))
+            return HttpResponse(str(e))
+        except OSError as e:
+            print(str(e))
+            return HttpResponse(str(e))
         # image_data=open(my_img.filepath, 'rb').read()
-        return FileResponse(open(my_img.filepath, 'rb'), content_type='image/jpeg')
+        return FileResponse(open(comp_img.filepath, 'rb'), content_type='image/jpeg')
+
+
+if __name__ == '__main__':
+    url = 'http://img.zcool.cn/community/0117e2571b8b238120dd8a4.jpg'
+    url_success='http://img.zcool.cn/community/0117e2571b8b246ac72538120dd8a4.jpg'
+    r = requests.get(url, stream=True)
+    # try:
+    #     r.raise_for_status()
+    # except HTTPError as e:
+    #     print(str(e))
+    # if r.status_code:
+    #     print('fail')
+    # else:
+    # with open('temp.jpg', 'wb') as fd:
+    #     for chunk in r.iter_content(chunk_size=128):
+    #         fd.write(chunk)
+    # im=Image.open('testimage.txt')
+    # im.size()
