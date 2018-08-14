@@ -46,16 +46,19 @@ class CompressImage(object):
 
     def get_image_name(self):
         re_result = re.search('.*/(.+)', self.url)
-        if re_result:
+        try:
             return re_result.group(1)
-
+        except AttributeError:
+            raise AttributeError("url %r is not correct {image_url}" % (self.url))
+        # raise IndexError("url %r is not correct {image_url}"
+        #           % (self.url))
         # 如果不是类似 https://imgsa.baidu.com/forum/pic/item/462309f790529822a8f35517dbca7bcb0b46d426.jpg的格式
         # 那么获取文件类型
-        re_result = re.search('.*\.(.*)', self.url)
-        if re_result:
-            file_type = re_result.group(1)
-            return 'temp.' + file_type
-        return 'temp.jpg'
+        # re_result = re.search('.*\.(.*)', self.url)
+        # if re_result:
+        #     file_type = re_result.group(1)
+        #     return 'temp.' + file_type
+        # return 'temp.jpg'
 
     def create_image_from_url(self):
         r = requests.get(self.url, stream=True)
@@ -95,6 +98,9 @@ class ImageProxy(View):
             comp_img = CompressImage(image_url)
             comp_img.create_image_from_url()
             comp_img.compress_image(width_in_pixel, height_in_pixel)
+        except AttributeError as e:
+            print(str(e))
+            return HttpResponse(str(e))
         except HTTPError as e:
             print(str(e))
             return HttpResponse(str(e))
@@ -106,9 +112,11 @@ class ImageProxy(View):
 
 
 if __name__ == '__main__':
-    url = 'http://img.zcool.cn/community/0117e2571b8b238120dd8a4.jpg'
+    url = 'https/462309f790529822a8f35517dbca7bcb0b46d426.jpg'
     url_success='http://img.zcool.cn/community/0117e2571b8b246ac72538120dd8a4.jpg'
-    r = requests.get(url, stream=True)
+    re_result = re.search('.*/(.+)', url)
+    print(re_result.group(1))
+    # r = requests.get(url, stream=True)
     # try:
     #     r.raise_for_status()
     # except HTTPError as e:
@@ -119,5 +127,12 @@ if __name__ == '__main__':
     # with open('temp.jpg', 'wb') as fd:
     #     for chunk in r.iter_content(chunk_size=128):
     #         fd.write(chunk)
-    # im=Image.open('testimage.txt')
+    im=Image.open('test.jpg')
+    print(im.format)
+    import os
+    print(os.path.getctime('test.jpg'))
+    t=os.path.getctime('test.jpg')
+    import time
+    print(time.strftime('%Y-%m-%d', time.localtime(t)))
     # im.size()
+    from django.contrib.sessions.middleware import SessionMiddleware
