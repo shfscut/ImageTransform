@@ -130,14 +130,7 @@ class ImageProxy(View):
             comp_img = CompressImage(image_url,width_in_pixel, height_in_pixel)
             comp_img.create_image_from_url()
             comp_img.compress_image()
-        except AttributeError as e:
-            print(str(e))
-            return HttpResponse(str(e))
-        except HTTPError as e:
-            print(str(e))
-            return HttpResponse(str(e))
-        except OSError as e:
-            print(str(e))
+        except Exception as e:
             return HttpResponse(str(e))
         # image_data=open(my_img.filepath, 'rb').read()
         return HttpResponse(open(comp_img.compress_filepath, 'rb'), content_type='image/jpeg')
