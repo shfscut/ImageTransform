@@ -17,9 +17,10 @@ from django.conf.urls import url
 from django.contrib import admin
 from django.conf.urls.static import static
 from django.views.static import serve
+from django.views.decorators.cache import cache_page
 
 from markdownblog import settings
-from apps.imageproxy.views import ImageProxy
+from apps.imageproxy.views import ImageProxy, test
 
 urlpatterns = [
     url(r'^admin/', admin.site.urls),
@@ -28,6 +29,8 @@ urlpatterns = [
     url(r'^media/(?P<path>.*)$', serve,{'document_root':settings.MEDIA_ROOT}),
 
     # image resize
-    url(r'^(?P<transform_params>.*?)/(?P<image_url>.+)', ImageProxy.as_view(), name='resize-image')
+    url(r'^(?P<transform_params>.*?)/(?P<image_url>.+)/$', cache_page(60*30)(ImageProxy.as_view()), name='resize-image'),
+
+    url(r'^test/$', test)
 ]
 # + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -1,10 +1,13 @@
 # coding: utf-8
 import re
 import os
+from datetime import datetime
 
 from django.shortcuts import render
-from django.http import HttpResponseRedirect, HttpResponse, FileResponse
+from django.http import HttpResponseRedirect, HttpResponse, FileResponse, StreamingHttpResponse
 from django.views import View
+from django.views.decorators.cache import cache_page
+
 import requests
 from requests.exceptions import HTTPError
 from PIL import Image
@@ -19,30 +22,17 @@ class CompressImage(object):
     3. get_image_size：获取原始图片尺寸
     4. compress_image：压缩原始图片
     """
-    def __init__(self, url):
+    def __init__(self, url, compress_width=0, compress_height=0):
         self.url = url
+        self.compress_width=compress_width
+        self.compress_height=compress_height
         self.imagename = self.get_image_name()
-        self.filepath = os.path.join(settings.MEDIA_ROOT,self.imagename)
+        self.source_filepath = os.path.join(settings.MEDIA_ROOT,self.imagename)
+        self.compress_filepath=os.path.join(settings.MEDIA_ROOT, 'w{}h{}-{}'.format(compress_width, compress_height, self.imagename))
         self.im = self.create_image_from_url()
 
     def get_image_size(self):
         return self.im.size
-
-    def compress_image(self, dst_w=0, dst_h=0):
-        ori_w, ori_h = self.get_image_size()
-        w_ratio, h_ratio = None, None
-        if 0 < dst_w < ori_w or 0 < dst_h < ori_h:
-            if 0 < dst_w < ori_w:
-                w_ratio = float(dst_w) / ori_w
-            if 0 < dst_h < ori_h:
-                h_ratio = float(dst_h) / ori_h
-            min_ratio = min(s for s in [w_ratio, h_ratio] if s)
-            re_width, re_height = int(ori_w * min_ratio), int(ori_h * min_ratio)
-        else:
-            re_width, re_height = ori_w, ori_h
-
-        # 根据压缩后的像素尺寸进行resize,并保存为filename
-        self.im.resize((re_width, re_height), Image.ANTIALIAS).save(self.filepath)
 
     def get_image_name(self):
         re_result = re.search('.*/(.+)', self.url)
@@ -60,7 +50,37 @@ class CompressImage(object):
         #     return 'temp.' + file_type
         # return 'temp.jpg'
 
+    def get_image_object(self):
+        try:
+            im=Image.open(self.source_filepath)
+        except OSError:
+            raise
+        return im
+
+    def compress_image(self):
+        ori_w, ori_h = self.get_image_size()
+        dst_w, dst_h = self.compress_width, self.compress_height
+        w_ratio, h_ratio = None, None
+        if 0 < dst_w < ori_w or 0 < dst_h < ori_h:
+            if 0 < dst_w < ori_w:
+                w_ratio = float(dst_w) / ori_w
+            if 0 < dst_h < ori_h:
+                h_ratio = float(dst_h) / ori_h
+            min_ratio = min(s for s in [w_ratio, h_ratio] if s)
+            re_width, re_height = int(ori_w * min_ratio), int(ori_h * min_ratio)
+        else:
+            re_width, re_height = ori_w, ori_h
+
+        # 根据压缩后的像素尺寸进行resize,并保存为filename
+        self.im.resize((re_width, re_height), Image.ANTIALIAS).save(self.compress_filepath)
+
+
+
     def create_image_from_url(self):
+        if os.path.exists(self.source_filepath):
+            if self.is_new():
+                return self.get_image_object()
+
         r = requests.get(self.url, stream=True)
         try:
             r.raise_for_status() # Raises stored HTTPError, if one occurred
@@ -68,14 +88,26 @@ class CompressImage(object):
             raise
 
         try:
-            with open(self.filepath, 'wb') as fd:
+            with open(self.source_filepath, 'wb') as fd:
                 for chunk in r.iter_content(chunk_size=128):
                     fd.write(chunk)
-            im = Image.open(self.filepath)
         except OSError:
             raise
         # 获取filename文件句柄
-        return im
+        return self.get_image_object()
+
+    def is_new(self):
+        """
+        判断self.source_filepath是否为最新的图片
+        :return:True or False
+        """
+        r=requests.head(self.url)
+        last_modified = r.headers['Last-Modified']
+        dt_last_modified=datetime.strptime(last_modified, '%a, %d %b %Y %H:%M:%S %Z')
+        timestamp=os.path.getmtime(self.source_filepath)
+        # 注意时区问题，要转化成utc
+        dt_source_filepath=datetime.utcfromtimestamp(timestamp)
+        return dt_source_filepath > dt_last_modified
 
 
 class ImageProxy(View):
@@ -95,9 +127,9 @@ class ImageProxy(View):
 
         # 第二步 获取image_url
         try:
-            comp_img = CompressImage(image_url)
+            comp_img = CompressImage(image_url,width_in_pixel, height_in_pixel)
             comp_img.create_image_from_url()
-            comp_img.compress_image(width_in_pixel, height_in_pixel)
+            comp_img.compress_image()
         except AttributeError as e:
             print(str(e))
             return HttpResponse(str(e))
@@ -108,31 +140,10 @@ class ImageProxy(View):
             print(str(e))
             return HttpResponse(str(e))
         # image_data=open(my_img.filepath, 'rb').read()
-        return FileResponse(open(comp_img.filepath, 'rb'), content_type='image/jpeg')
+        return HttpResponse(open(comp_img.compress_filepath, 'rb'), content_type='image/jpeg')
+
+@cache_page(10)
+def test(request):
+    return HttpResponse('test')
 
 
-if __name__ == '__main__':
-    url = 'https/462309f790529822a8f35517dbca7bcb0b46d426.jpg'
-    url_success='http://img.zcool.cn/community/0117e2571b8b246ac72538120dd8a4.jpg'
-    re_result = re.search('.*/(.+)', url)
-    print(re_result.group(1))
-    # r = requests.get(url, stream=True)
-    # try:
-    #     r.raise_for_status()
-    # except HTTPError as e:
-    #     print(str(e))
-    # if r.status_code:
-    #     print('fail')
-    # else:
-    # with open('temp.jpg', 'wb') as fd:
-    #     for chunk in r.iter_content(chunk_size=128):
-    #         fd.write(chunk)
-    im=Image.open('test.jpg')
-    print(im.format)
-    import os
-    print(os.path.getctime('test.jpg'))
-    t=os.path.getctime('test.jpg')
-    import time
-    print(time.strftime('%Y-%m-%d', time.localtime(t)))
-    # im.size()
-    from django.contrib.sessions.middleware import SessionMiddleware
