@@ -114,3 +114,5 @@ re_test.py
 test-uwsgi.ini
 uwsgi_params
 
+.idea/
+
